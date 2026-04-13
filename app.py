@@ -1,18 +1,17 @@
 import os
 from flask import Flask, jsonify, request
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 
 app = Flask(__name__)
 
 def get_db():
-    return psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+    return psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row)
 
 def init_db():
     try:
         conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS notes (
                 id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -21,7 +20,6 @@ def init_db():
             )
         """)
         conn.commit()
-        cur.close()
         conn.close()
     except Exception as e:
         print(f"DB init: {e}")
@@ -36,9 +34,7 @@ def home():
 def health():
     try:
         conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT 1")
-        cur.close()
+        conn.execute("SELECT 1")
         conn.close()
         return jsonify({"healthy": True, "database": "connected"})
     except Exception as e:
@@ -47,10 +43,7 @@ def health():
 @app.route("/notes", methods=["GET"])
 def list_notes():
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM notes ORDER BY created_at DESC LIMIT 50")
-    notes = cur.fetchall()
-    cur.close()
+    notes = conn.execute("SELECT * FROM notes ORDER BY created_at DESC LIMIT 50").fetchall()
     conn.close()
     return jsonify(notes)
 
@@ -60,13 +53,10 @@ def create_note():
     if not data or not data.get("title"):
         return jsonify({"error": "title is required"}), 400
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(
+    note = conn.execute(
         "INSERT INTO notes (title, content) VALUES (%s, %s) RETURNING *",
         (data["title"], data.get("content", ""))
-    )
-    note = cur.fetchone()
+    ).fetchone()
     conn.commit()
-    cur.close()
     conn.close()
     return jsonify(dict(note)), 201
