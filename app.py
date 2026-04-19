@@ -2,6 +2,7 @@ import os
 from flask import Flask, jsonify, request
 import psycopg
 from psycopg.rows import dict_row
+from leash import get_leash_user, is_authenticated
 
 app = Flask(__name__)
 
@@ -60,3 +61,15 @@ def create_note():
     conn.commit()
     conn.close()
     return jsonify(dict(note)), 201
+
+@app.route("/me")
+def me():
+    try:
+        user = get_leash_user(request)
+        return jsonify({"user": user.__dict__})
+    except Exception:
+        return jsonify({"error": "Not authenticated"}), 401
+
+@app.route("/auth-status")
+def auth_status():
+    return jsonify({"authenticated": is_authenticated(request)})
